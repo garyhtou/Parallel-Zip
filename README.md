@@ -15,5 +15,9 @@
 
 
 # TODO:
-- check sys call return
-- 
+- semaphores for ordering output (partly done)
+- make it performant
+- use get_nprocs()
+- check system call return values
+- check for memory leaks and deadlock
+- clean up code (comments, etc.)
