@@ -12,8 +12,3 @@
 
 ## About
 
-
-
-# TODO:
-- check sys call return
-- 
