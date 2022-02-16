@@ -39,6 +39,7 @@
 #include <queue>
 #include <semaphore.h>
 #include <fcntl.h>
+#include <sys/sysinfo.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <mutex>
@@ -83,7 +84,11 @@ int main(int argc, char *argv[])
 
 	// Initalize semaphore
 	sem_init(&full, 0, 0);
-	vector<pthread_t> tids = startThreadPool(1);
+
+	//get the number of threads 
+    int num_thrd = get_n_procs();
+
+	vector<pthread_t> tids = startThreadPool(num_thrd);
 
 	// Queue filepaths
 	// Semaphore index 0 is not used to make the indecies in the code below nicer.
@@ -137,6 +142,8 @@ void stopThreadPool(vector<pthread_t> tids)
 vector<pthread_t> startThreadPool(int num_threads)
 {
 	vector<pthread_t> tids;
+
+
 
 	int retry = 0;
 	for (int i = 0; i < num_threads; i++)
