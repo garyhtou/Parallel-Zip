@@ -102,9 +102,10 @@ int main(int argc, char *argv[])
 	}
 	
 	// First file
+	sem_init(&sems[0],0,1);
 	sem_init(&sems[1], 0, 0);
 	cout<<"First semaphone created"<<endl<<endl;
-	queueFile(argv[1], NULL, &sems[1]);
+	queueFile(argv[1], &sems[0], &sems[1]);
 	cout << "first file" << endl;
 
 	// Second to second to last file
@@ -188,16 +189,22 @@ void *job_runner(void *)
 	{
 		// Wait until there is a job in the queue
 		sem_wait(&full);
-		cout << "GOT A JOB";
+		cout << "GOT A JOB"<<endl;
 
 		// Aquire lock for queue
+	
 		job_t job;
 		mtx.lock();
+	   
+	    cout<<"Aquired lock"<<endl;
 		// Get the next job
 		job = jobs.front();
 		jobs.pop();
 		// Release the lock
+	
 		mtx.unlock();
+		cout<< "unlocked" <<endl;
+
 
 		// Check if the job is a kill request
 		if (job.kill)
@@ -209,14 +216,18 @@ void *job_runner(void *)
 		// This wzip code is largely based on Professor Zhu's solution for Project 1
 		int count = 0;
 		char last;
+		cout<< "get job sem"<<endl;
 		sem_wait(job.prev_sem);
+		
 		for (int i = 0; i < job.fileSize; i++)
 		{
 			// printf("\tCURRENT CHAR: %c\n", job.file[i]);
 			if (count && job.file[i] != last)
 			{
-				cout.write((char *)&count, sizeof(int));
-				cout.write((char *)&last, 1);
+				//cout.write((char *)&count, sizeof(int));
+				fwrite(&count,4,1,stdout);
+				//cout.write((char *)&last, 1);
+				fwrite(&last,1,1,stdout);
 				count = 0;
 			}
 			last = job.file[i];
@@ -228,6 +239,7 @@ void *job_runner(void *)
 			cout.write((char *)&count, sizeof(int));
 			cout.write((char *)&last, 1);
 		}
+		
 		sem_post(job.next_sem);
 
 		// TODO: deallocate memory for mmap? (memory leak)
@@ -240,7 +252,7 @@ void queueFile(string filepath, sem_t *prev_sem, sem_t *next_sem)
 
 	//TODO:FIX BAD FILE DESCRIPTOR ERROR
 	int fd = open(filepath.c_str(), O_RDONLY, S_IRUSR | S_IWUSR);
-	
+
 	struct stat sb;
 
 	// Grabbing size of sb, stored in sb.st_size
@@ -254,6 +266,7 @@ void queueFile(string filepath, sem_t *prev_sem, sem_t *next_sem)
 
 	// Create job
 	addJob(false, mmapFile, sb.st_size, prev_sem, next_sem);
+	cout<< "job added"<<endl;
 }
 
 void addJob(bool kill, char *file, off_t size, sem_t *prev_sem, sem_t *next_sem)
