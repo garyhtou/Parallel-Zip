@@ -267,4 +267,5 @@ void addJob(bool kill, char *file, off_t size, sem_t *prev_sem, sem_t *next_sem)
 
 	// Make job runnable by posting to semaphore
 	sem_post(&full);
+	
 }
