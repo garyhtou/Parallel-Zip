@@ -86,14 +86,15 @@ int main(int argc, char *argv[])
 	sem_init(&full, 0, 0);
 
 	//get the number of threads 
-    int num_thrd = get_n_procs();
+    int num_thrd = get_nprocs();
 
+	//fill thread pool
 	vector<pthread_t> tids = startThreadPool(num_thrd);
 
 	// Queue filepaths
 	// Semaphore index 0 is not used to make the indecies in the code below nicer.
 	vector<sem_t> sems;
-	// TODO: create semaphores for ordering
+	// TODO: create semaphores for ordering output
 	// sems.push_back();
 
 	// First file
