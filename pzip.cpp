@@ -93,12 +93,17 @@ int main(int argc, char *argv[])
 
 	// Queue filepaths
 	// Semaphore index 0 is not used to make the indecies in the code below nicer.
-	vector<sem_t> sems;
+	
+	vector<sem_t > sems;
 	// TODO: create semaphores for ordering output
-	// sems.push_back();
-
+	for (int i = 0 ; i< argc; i++){
+		sem_t  thrd_sem;
+		sems.push_back(thrd_sem);
+	}
+	
 	// First file
 	sem_init(&sems[1], 0, 0);
+	cout<<"First semaphone created"<<endl<<endl;
 	queueFile(argv[1], NULL, &sems[1]);
 	cout << "first file" << endl;
 
@@ -144,19 +149,20 @@ vector<pthread_t> startThreadPool(int num_threads)
 {
 	vector<pthread_t> tids;
 
-
+	cout<<num_threads<< endl<< endl;
 
 	int retry = 0;
 	for (int i = 0; i < num_threads; i++)
-	{
+	{	
 		pthread_t tid;
-		if (pthread_create(&tid, NULL, job_runner, NULL))
-		{
+		if (pthread_create(&tid, NULL, job_runner, NULL)!=0)
+		{  
+		
 			if (retry < num_threads)
 			{
 				// Going to retry to create this thread
 				retry++;
-				i--;
+				i--; 
 			}
 			else
 			{
@@ -169,7 +175,8 @@ vector<pthread_t> startThreadPool(int num_threads)
 			tids.push_back(tid);
 		}
 	}
-
+	
+	cout<<"returning thread id's"<<endl;
 	return tids;
 }
 
@@ -229,9 +236,11 @@ void *job_runner(void *)
 
 void queueFile(string filepath, sem_t *prev_sem, sem_t *next_sem)
 {
-	// cout << "queuing file " << filepath << endl;
+	 cout << "queuing file " << filepath << endl;
 
+	//TODO:FIX BAD FILE DESCRIPTOR ERROR
 	int fd = open(filepath.c_str(), O_RDONLY, S_IRUSR | S_IWUSR);
+	
 	struct stat sb;
 
 	// Grabbing size of sb, stored in sb.st_size
