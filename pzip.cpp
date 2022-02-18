@@ -85,27 +85,29 @@ int main(int argc, char *argv[])
 	// Initalize semaphore
 	sem_init(&full, 0, 0);
 
-	//get the number of threads 
-    int num_thrd = get_nprocs();
+	// get the number of threads
+	int num_thrd = get_nprocs();
 
-	//fill thread pool
+	// fill thread pool
 	vector<pthread_t> tids = startThreadPool(num_thrd);
 
 	// Queue filepaths
 	// Semaphore index 0 is not used to make the indecies in the code below nicer.
-	
-	vector<sem_t > sems;
+
+	vector<sem_t> sems;
 	// TODO: create semaphores for ordering output
-	for (int i = 0 ; i< argc; i++){
-		sem_t  thrd_sem;
+	for (int i = 0; i < argc; i++)
+	{
+		sem_t thrd_sem;
 		sems.push_back(thrd_sem);
 	}
-	
+
 	// First file
-	sem_init(&sems[0],0,1);
+	// sem_init(&sems[0],0,1);
 	sem_init(&sems[1], 0, 0);
-	cout<<"First semaphone created"<<endl<<endl;
-	queueFile(argv[1], &sems[0], &sems[1]);
+	cout << "First semaphone created" << endl
+		 << endl;
+	queueFile(argv[1], NULL, &sems[1]);
 	cout << "first file" << endl;
 
 	// Second to second to last file
@@ -150,20 +152,21 @@ vector<pthread_t> startThreadPool(int num_threads)
 {
 	vector<pthread_t> tids;
 
-	cout<<num_threads<< endl<< endl;
+	cout << num_threads << endl
+		 << endl;
 
 	int retry = 0;
 	for (int i = 0; i < num_threads; i++)
-	{	
+	{
 		pthread_t tid;
-		if (pthread_create(&tid, NULL, job_runner, NULL)!=0)
-		{  
-		
+		if (pthread_create(&tid, NULL, job_runner, NULL) != 0)
+		{
+
 			if (retry < num_threads)
 			{
 				// Going to retry to create this thread
 				retry++;
-				i--; 
+				i--;
 			}
 			else
 			{
@@ -176,8 +179,8 @@ vector<pthread_t> startThreadPool(int num_threads)
 			tids.push_back(tid);
 		}
 	}
-	
-	cout<<"returning thread id's"<<endl;
+
+	cout << "returning thread id's" << endl;
 	return tids;
 }
 
@@ -189,22 +192,21 @@ void *job_runner(void *)
 	{
 		// Wait until there is a job in the queue
 		sem_wait(&full);
-		cout << "GOT A JOB"<<endl;
+		cout << "GOT A JOB" << endl;
 
 		// Aquire lock for queue
-	
+
 		job_t job;
 		mtx.lock();
-	   
-	    cout<<"Aquired lock"<<endl;
+
+		cout << "Aquired lock" << endl;
 		// Get the next job
 		job = jobs.front();
 		jobs.pop();
 		// Release the lock
-	
-		mtx.unlock();
-		cout<< "unlocked" <<endl;
 
+		mtx.unlock();
+		cout << "unlocked" << endl;
 
 		// Check if the job is a kill request
 		if (job.kill)
@@ -216,18 +218,22 @@ void *job_runner(void *)
 		// This wzip code is largely based on Professor Zhu's solution for Project 1
 		int count = 0;
 		char last;
-		cout<< "get job sem"<<endl;
-		sem_wait(job.prev_sem);
-		
+		cout << "get job sem" << endl;
+
+		if (job.prev_sem)
+		{
+			sem_wait(job.prev_sem);
+		}
+
 		for (int i = 0; i < job.fileSize; i++)
 		{
 			// printf("\tCURRENT CHAR: %c\n", job.file[i]);
 			if (count && job.file[i] != last)
 			{
-				//cout.write((char *)&count, sizeof(int));
-				fwrite(&count,4,1,stdout);
-				//cout.write((char *)&last, 1);
-				fwrite(&last,1,1,stdout);
+				// cout.write((char *)&count, sizeof(int));
+				fwrite(&count, 4, 1, stdout);
+				// cout.write((char *)&last, 1);
+				fwrite(&last, 1, 1, stdout);
 				count = 0;
 			}
 			last = job.file[i];
@@ -239,18 +245,18 @@ void *job_runner(void *)
 			cout.write((char *)&count, sizeof(int));
 			cout.write((char *)&last, 1);
 		}
-		
-		sem_post(job.next_sem);
-
+		if (job.next_sem)
+		{
+			sem_post(job.next_sem);
+		}
 		// TODO: deallocate memory for mmap? (memory leak)
 	}
 }
 
 void queueFile(string filepath, sem_t *prev_sem, sem_t *next_sem)
 {
-	 cout << "queuing file " << filepath << endl;
+	cout << "queuing file " << filepath << endl;
 
-	//TODO:FIX BAD FILE DESCRIPTOR ERROR
 	int fd = open(filepath.c_str(), O_RDONLY, S_IRUSR | S_IWUSR);
 
 	struct stat sb;
@@ -266,7 +272,7 @@ void queueFile(string filepath, sem_t *prev_sem, sem_t *next_sem)
 
 	// Create job
 	addJob(false, mmapFile, sb.st_size, prev_sem, next_sem);
-	cout<< "job added"<<endl;
+	cout << "job added" << endl;
 }
 
 void addJob(bool kill, char *file, off_t size, sem_t *prev_sem, sem_t *next_sem)
@@ -281,7 +287,6 @@ void addJob(bool kill, char *file, off_t size, sem_t *prev_sem, sem_t *next_sem)
 
 	// Aquire lock for queue
 	mtx.lock();
-
 	// Add the new job to the queue
 	jobs.push(job);
 
@@ -290,5 +295,4 @@ void addJob(bool kill, char *file, off_t size, sem_t *prev_sem, sem_t *next_sem)
 
 	// Make job runnable by posting to semaphore
 	sem_post(&full);
-	
 }
