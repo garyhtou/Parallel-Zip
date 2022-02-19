@@ -54,9 +54,8 @@ void stopThreadPool(vector<pthread_t> tids);
 void *job_runner(void *);
 void addJob(bool kill, char *filepath, sem_t *prev_sem, sem_t *next_sem);
 int testing = 0;
-int int_buffer_shift= sizeof(int);
-int char_buffer_shift= sizeof(int)/4;
-
+int int_buffer_shift = sizeof(int);
+int char_buffer_shift = sizeof(int) / 4;
 
 // Information to be passed to the job runners (child thread)
 struct job_t
@@ -298,11 +297,11 @@ void *job_runner(void *)
 
 		// int fd = open(job.filepath, O_RDONLY, S_IRUSR | S_IWUSR);
 
-		// // Grabbing size of file
+		// Grabbing size of file
 		// struct stat sb;
 		// if (fstat(fd, &sb) == -1)
 		// {
-		// 	perror("could not get file size\n");
+		//  perror("could not get file size\n");
 		// }
 
 		// char *mmapFile = (char *)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -321,7 +320,8 @@ void *job_runner(void *)
 			// printf("\tCURRENT CHAR: %c\n", job.file[i]);
 			if (count && map.mmap[i] != last)
 			{
-				// cout.write((char *)&count, sizeof(int));
+				// cout.write((char *)&count, sizeof(int)
+
 				buff[buffIndex++] = count;
 				buff[buffIndex++] = count >> 8;
 				buff[buffIndex++] = count >> 16;
@@ -335,14 +335,13 @@ void *job_runner(void *)
 
 		if (count)
 		{
-				buff[buffIndex++] = count;
-				buff[buffIndex++] = count >> 8;
-				buff[buffIndex++] = count >> 16;
-				buff[buffIndex++] = count >> 24;
-				buff[buffIndex++] = last;
 
-			// cout.write((char *)&count, sizeof(int));
-			// cout.write((char *)&last, 1);
+			buff[buffIndex++] = count;
+			buff[buffIndex++] = count >> 8;
+			buff[buffIndex++] = count >> 16;
+			buff[buffIndex++] = count >> 24;
+			buff[buffIndex++] = last;
+			count = 0;
 		}
 
 		if (job.prev_sem != NULL)
