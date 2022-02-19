@@ -5,10 +5,10 @@ echo
 NAME=output
 
 echo "[zzip] zipping..."
-eval "./zzip $1 > $NAME.zzip"
+eval "time ./zzip $1 > $NAME.zzip"
 
 echo "[pzip] zipping..."
-eval "./pzip $1 > $NAME.pzip"
+eval "time ./pzip $1 > $NAME.pzip"
 echo
 
 # eval "cat out.zip"
