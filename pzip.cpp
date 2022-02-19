@@ -53,6 +53,7 @@ vector<pthread_t> startThreadPool(int num_threads);
 void stopThreadPool(vector<pthread_t> tids);
 void *job_runner(void *);
 void addJob(bool kill, char *filepath, sem_t *prev_sem, sem_t *next_sem);
+int testing = 1;
 
 // Information to be passed to the job runners (child thread)
 struct job_t
@@ -66,6 +67,7 @@ struct job_t
 //
 struct mem_map_t
 {
+	bool success;
 	char *mmap;
 	off_t f_size;
 };
@@ -111,7 +113,7 @@ int main(int argc, char *argv[])
 		if (i == 1)
 		{
 			// No previous sem
-			addJob(false, argv[i], NULL, &loopSem);
+			addJob(false, argv[i], NULL, &sems[i - 1]);
 		}
 		// Last file
 		else if (i == argc - 1)
@@ -122,7 +124,7 @@ int main(int argc, char *argv[])
 		// Middle file
 		else
 		{
-			addJob(false, argv[i], &sems[i - 2], &loopSem);
+			addJob(false, argv[i], &sems[i - 2], &sems[i - 1]);
 		}
 	}
 
@@ -132,39 +134,51 @@ int main(int argc, char *argv[])
 
 mem_map_t mmapFile(const char *filepath)
 {
-	// cout << "queuing file " << filepath << endl;
+	if (testing == 1)
+		cout << "queuing file " << filepath << endl;
 
-	int fd = open(filepath, O_RDONLY, S_IRUSR | S_IWUSR);
-
-	struct stat sb;
-
-	// Grabbing size of sb, stored in sb.st_size
-	if (fstat(fd, &sb) == -1)
+	try
 	{
-		perror("could not get file size\n");
+		int fd = open(filepath, O_RDONLY, S_IRUSR | S_IWUSR);
+
+		struct stat sb;
+
+		// Grabbing size of sb, stored in sb.st_size
+		if (fstat(fd, &sb) == -1)
+		{
+			perror("could not get file size\n");
+		}
+
+		// Mapping file into virtual memory
+		char *mmapFile = (char *)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+
+		// Create job
+		// addJob(false, fd, sb.st_size, prev_sem, next_sem);
+		mem_map_t map;
+		map.success = true;
+		map.mmap = mmapFile;
+		map.f_size = sb.st_size;
+
+		return map;
 	}
-
-	// Mapping file into virtual memory
-	char *mmapFile = (char *)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-
-	// Create job
-	// addJob(false, fd, sb.st_size, prev_sem, next_sem);
-	mem_map_t map;
-	map.mmap = mmapFile;
-	map.f_size = sb.st_size;
-
-	return map;
+	catch (...)
+	{
+		// Failed to memory map file
+		mem_map_t map;
+		map.success = false;
+		return map;
+	}
 }
 
 // This function will add kill requests to the job queue and return once all
 // threads have quit.
 void stopThreadPool(vector<pthread_t> tids)
 {
-	// Add kill request jobs
-	for (size_t i = 0; i < tids.size(); i++)
-	{
-		addJob(true, NULL, NULL, NULL);
-	}
+	// Add kill request jobs. This single kill job will be shared by all threads
+	// in the queue
+	if (testing == 1)
+		cout << "ADDING KILL JOB" << endl;
+	addJob(true, NULL, NULL, NULL);
 
 	// Wait for all threads to finish
 	for (size_t i = 0; i < tids.size(); i++)
@@ -194,7 +208,11 @@ vector<pthread_t> startThreadPool(int num_threads)
 			}
 			else
 			{
-				cout << "Error creating thread" << endl;
+				if (testing == 1)
+				{
+					cout << "Error creating thread" << endl;
+				}
+
 				exit(1);
 			}
 		}
@@ -216,7 +234,8 @@ void *job_runner(void *)
 	{
 		// Wait until there is a job in the queue
 		sem_wait(&full);
-		// cout << "GOT A JOB" << endl;
+		if (testing == 1)
+			cout << "GOT A JOB" << endl;
 
 		// Aquire lock for queue
 
@@ -231,8 +250,13 @@ void *job_runner(void *)
 		// Check if the job is a kill request
 		if (job.kill)
 		{
+
 			// Leave "kill" request in the queue to kill other threads
 			mtx.unlock();
+			if (testing == 1)
+			{
+				cout << "Killing job" << endl;
+			}
 			pthread_exit(0);
 		}
 		else
@@ -243,6 +267,32 @@ void *job_runner(void *)
 
 		// MEMORY MAP FILE
 		mem_map_t map = mmapFile(job.filepath);
+		if (!map.success)
+		{
+			if (testing == 1)
+				cout << "MMap failed, ignoring job" << endl;
+			// Memory mapping file, ignore this job
+
+			// Wait on semaphores then go back to thread pool
+			if (job.prev_sem)
+			{
+				if (testing == 1)
+					cout << "MMap failed, waiting on prev sem" << endl;
+				sem_wait(job.prev_sem);
+			}
+			// TODO: Print buffer
+
+			if (job.next_sem)
+			{
+				if (testing == 1)
+					cout << "MMap failed, posting next sem" << endl;
+				sem_post(job.next_sem);
+			}
+
+			// continue, don't return. Otherwise, this thread will leave the pool.
+			continue;
+		}
+
 		// int fd = open(job.filepath, O_RDONLY, S_IRUSR | S_IWUSR);
 
 		// // Grabbing size of file
@@ -253,19 +303,15 @@ void *job_runner(void *)
 		// }
 
 		// char *mmapFile = (char *)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-		// cout << "unlocked" << endl;
+
+		// TODO: Create buffer
+		char *buff = (char *)malloc(5 * map.f_size);
+		int buffIndex = 0;
 
 		// Process the job
 		// This wzip code is largely based on Professor Zhu's solution for Project 1
 		int count = 0;
 		char last;
-		// cout << "get job sem" << endl;
-
-		// COMPRESS AND PRINT FILE
-		if (job.prev_sem)
-		{
-			sem_wait(job.prev_sem);
-		}
 
 		for (off_t i = 0; i < map.f_size; i++)
 		{
@@ -273,9 +319,9 @@ void *job_runner(void *)
 			if (count && map.mmap[i] != last)
 			{
 				// cout.write((char *)&count, sizeof(int));
-				fwrite(&count, 4, 1, stdout);
+				buff[buffIndex++] = count;
 				// cout.write((char *)&last, 1);
-				fwrite(&last, 1, 1, stdout);
+				buff[buffIndex++] = last;
 				count = 0;
 			}
 			last = map.mmap[i];
@@ -284,14 +330,35 @@ void *job_runner(void *)
 
 		if (count)
 		{
-			cout.write((char *)&count, sizeof(int));
-			cout.write((char *)&last, 1);
+			buff[buffIndex++] = count;
+			buff[buffIndex++] = last;
+
+			// cout.write((char *)&count, sizeof(int));
+			// cout.write((char *)&last, 1);
 		}
-		if (job.next_sem)
+
+		if (job.prev_sem != NULL)
 		{
+			if (testing == 1)
+			{
+				cout << "waiting on previous semn" << endl;
+			}
+			sem_wait(job.prev_sem);
+		}
+		// TODO: Print buffer
+		fwrite(buff, sizeof(char), (size_t)buffIndex, stdout);
+
+		if (job.next_sem != NULL)
+		{
+			if (testing == 1)
+			{
+				cout << "posting next sem" << endl;
+			}
 			sem_post(job.next_sem);
 		}
 		// TODO: deallocate memory for mmap? (memory leak)
+
+		// DO NOT RETURN, otherwise, this thread will leave the thread pool
 	}
 }
 
@@ -305,11 +372,18 @@ void addJob(bool kill, char *filepath, sem_t *prev_sem, sem_t *next_sem)
 	job.next_sem = next_sem;
 
 	// Aquire lock for queue
+	if (testing == 1)
+	{
+		cout << "Getting mtx lock" << endl;
+	}
 	mtx.lock();
 	// Add the new job to the queue
 	jobs.push(job);
 
 	// Release lock
+	if (testing == 1)
+		cout << "unlocking mtx" << endl;
+
 	mtx.unlock();
 
 	// Make job runnable by posting to semaphore

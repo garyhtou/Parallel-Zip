@@ -21,3 +21,4 @@
 - check system call return values
 - check for memory leaks and deadlock
 - clean up code (comments, etc.)
+- Ignore file if it doesn't exist (check open?)
