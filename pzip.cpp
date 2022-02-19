@@ -96,6 +96,8 @@ int main(int argc, char *argv[])
 	// Get the number of processors available. Min() with number of files to
 	// prevent creating more threads than there are files.
 	int num_threads = min(argc - 1, get_nprocs());
+
+
 	if (testing == 1)
 	{
 		// cout << "Number of threads: " << num_threads << endl;
