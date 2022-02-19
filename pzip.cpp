@@ -4,7 +4,7 @@
 // num_threads = MIN(num_cpu, num_cpu)
 // Start pthread
 
-// mmap files (somehow?)
+
 // for each file, add a job to the queue
 
 // need lock around critical section (reading or writing from the queue/buffer)
@@ -54,8 +54,6 @@ void stopThreadPool(vector<pthread_t> tids);
 void *job_runner(void *);
 void addJob(bool kill, char *filepath, sem_t *prev_sem, sem_t *next_sem);
 int testing = 0;
-int int_buffer_shift = sizeof(int);
-int char_buffer_shift = sizeof(int) / 4;
 
 // Information to be passed to the job runners (child thread)
 struct job_t
@@ -66,7 +64,6 @@ struct job_t
 	sem_t *next_sem;
 };
 
-//
 struct mem_map_t
 {
 	bool success;
@@ -79,6 +76,7 @@ queue<job_t> jobs;
 
 // Mutex Lock for critical sections (when using shared queue)
 mutex mtx;
+
 // Semaphore to block runners when there are no files in the queue
 sem_t full;
 
@@ -134,6 +132,7 @@ int main(int argc, char *argv[])
 	stopThreadPool(tids);
 }
 
+//All
 mem_map_t mmapFile(const char *filepath)
 {
 	if (testing == 1)
@@ -141,7 +140,18 @@ mem_map_t mmapFile(const char *filepath)
 
 	try
 	{
+		mem_map_t map;
+
 		int fd = open(filepath, O_RDONLY, S_IRUSR | S_IWUSR);
+
+		// was not getting caught
+		if (fd < 0)
+		{
+			map.success = false;
+			map.mmap = NULL;
+			map.f_size = 0;
+			return map;
+		}
 
 		struct stat sb;
 
@@ -155,8 +165,7 @@ mem_map_t mmapFile(const char *filepath)
 		char *mmapFile = (char *)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
 		// Create job
-		// addJob(false, fd, sb.st_size, prev_sem, next_sem);
-		mem_map_t map;
+
 		map.success = true;
 		map.mmap = mmapFile;
 		map.f_size = sb.st_size;
@@ -192,8 +201,6 @@ void stopThreadPool(vector<pthread_t> tids)
 vector<pthread_t> startThreadPool(int num_threads)
 {
 	vector<pthread_t> tids;
-
-	// cout << num_threads << endl;
 
 	int retry = 0;
 	for (int i = 0; i < num_threads; i++)
@@ -282,7 +289,6 @@ void *job_runner(void *)
 					cout << "MMap failed, waiting on prev sem" << endl;
 				sem_wait(job.prev_sem);
 			}
-			// TODO: Print buffer
 
 			if (job.next_sem)
 			{
@@ -295,17 +301,6 @@ void *job_runner(void *)
 			continue;
 		}
 
-		// int fd = open(job.filepath, O_RDONLY, S_IRUSR | S_IWUSR);
-
-		// Grabbing size of file
-		// struct stat sb;
-		// if (fstat(fd, &sb) == -1)
-		// {
-		//  perror("could not get file size\n");
-		// }
-
-		// char *mmapFile = (char *)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-
 		// TODO: Create buffer
 		char *buff = (char *)malloc(5 * map.f_size);
 		int buffIndex = 0;
@@ -317,7 +312,7 @@ void *job_runner(void *)
 
 		for (off_t i = 0; i < map.f_size; i++)
 		{
-			// printf("\tCURRENT CHAR: %c\n", job.file[i]);
+			
 			if (count && map.mmap[i] != last)
 			{
 				// cout.write((char *)&count, sizeof(int)
@@ -335,7 +330,6 @@ void *job_runner(void *)
 
 		if (count)
 		{
-
 			buff[buffIndex++] = count;
 			buff[buffIndex++] = count >> 8;
 			buff[buffIndex++] = count >> 16;
@@ -352,7 +346,7 @@ void *job_runner(void *)
 			}
 			sem_wait(job.prev_sem);
 		}
-		// TODO: Print buffer
+
 		fwrite(buff, sizeof(char), (size_t)buffIndex, stdout);
 
 		if (job.next_sem != NULL)
@@ -364,7 +358,8 @@ void *job_runner(void *)
 			sem_post(job.next_sem);
 		}
 		// TODO: deallocate memory for mmap? (memory leak)
-
+		
+		//delete [] map.mmap;
 		// DO NOT RETURN, otherwise, this thread will leave the thread pool
 	}
 }
