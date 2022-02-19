@@ -4,7 +4,6 @@
 // num_threads = MIN(num_cpu, num_cpu)
 // Start pthread
 
-
 // for each file, add a job to the queue
 
 // need lock around critical section (reading or writing from the queue/buffer)
@@ -53,7 +52,7 @@ vector<pthread_t> startThreadPool(int num_threads);
 void stopThreadPool(vector<pthread_t> tids);
 void *job_runner(void *);
 void addJob(bool kill, char *filepath, sem_t *prev_sem, sem_t *next_sem);
-int testing = 0;
+int testing = 1;
 
 // Information to be passed to the job runners (child thread)
 struct job_t
@@ -95,36 +94,71 @@ int main(int argc, char *argv[])
 	// Get the number of processors available. Min() with number of files to
 	// prevent creating more threads than there are files.
 	int num_threads = min(argc - 1, get_nprocs());
+	if (testing == 1)
+	{
+		cout << "Number of threads: " << num_threads << endl;
+	}
 
 	// fill thread pool
 	vector<pthread_t> tids = startThreadPool(num_threads);
 
 	// Queue filepaths and create semaphores for order
-	vector<sem_t> sems;
+	vector<sem_t *> sems;
+
 	// TODO: switch to only storing previous sem
 	for (int i = 1; i < argc; i++)
 	{
+		// If single file, no need for semaphore
+		// if (i == 1 && argc == 2)
+		// {
+		// 	addJob(false, argv[i], NULL, NULL);
+		// 	continue;
+		// }
+
 		// Create semaphore
 		sem_t loopSem;
 		sem_init(&loopSem, 0, 0);
-		sems.push_back(loopSem);
+		sems.push_back(&loopSem);
+
+		if (testing == 1)
+		{
+			cout << "Adding job: " << i << endl;
+		}
 
 		// First file
 		if (i == 1)
 		{
+			if (testing == 1)
+			{
+				cout << "First file: " << argv[i] << endl;
+			}
 			// No previous sem
-			addJob(false, argv[i], NULL, &sems[i - 1]);
+			addJob(false, argv[i], NULL, sems[i - 1]);
 		}
 		// Last file
 		else if (i == argc - 1)
 		{
+			if (testing == 1)
+			{
+				cout << "Last file: " << argv[i] << endl;
+			}
 			// No next sem
-			addJob(false, argv[i], &sems[i - 2], NULL);
+			addJob(false, argv[i], sems[i - 2], NULL);
 		}
 		// Middle file
 		else
 		{
-			addJob(false, argv[i], &sems[i - 2], &sems[i - 1]);
+			if (testing == 1)
+			{
+				cout << "Middle file: " << argv[i] << endl;
+			}
+			addJob(false, argv[i], sems[i - 2], sems[i - 1]);
+		}
+
+		if (testing == 1)
+		{
+			cout << "i=" << i << ". Sem[i - 1]: " << sems[i - 1] << endl;
+			cout << "i=" << i << ". Sem[i - 2]: " << sems[i - 2] << endl;
 		}
 	}
 
@@ -132,7 +166,7 @@ int main(int argc, char *argv[])
 	stopThreadPool(tids);
 }
 
-//All
+// All
 mem_map_t mmapFile(const char *filepath)
 {
 	if (testing == 1)
@@ -259,7 +293,6 @@ void *job_runner(void *)
 		// Check if the job is a kill request
 		if (job.kill)
 		{
-
 			// Leave "kill" request in the queue to kill other threads
 			mtx.unlock();
 			if (testing == 1)
@@ -270,6 +303,10 @@ void *job_runner(void *)
 		}
 		else
 		{
+			if (testing == 1)
+			{
+				cout << "Removing job. filename: " << job.filepath << endl;
+			}
 			jobs.pop();
 			mtx.unlock();
 		}
@@ -312,15 +349,13 @@ void *job_runner(void *)
 
 		for (off_t i = 0; i < map.f_size; i++)
 		{
-			
+
 			if (count && map.mmap[i] != last)
 			{
-				// cout.write((char *)&count, sizeof(int)
-
-				buff[buffIndex++] = count;
-				buff[buffIndex++] = count >> 8;
-				buff[buffIndex++] = count >> 16;
-				buff[buffIndex++] = count >> 24;
+				buff[buffIndex++] = count & 0xff;
+				buff[buffIndex++] = (count >> 8) & 0xff;
+				buff[buffIndex++] = (count >> 16) & 0xff;
+				buff[buffIndex++] = (count >> 24) & 0xff;
 				buff[buffIndex++] = last;
 				count = 0;
 			}
@@ -330,10 +365,10 @@ void *job_runner(void *)
 
 		if (count)
 		{
-			buff[buffIndex++] = count;
-			buff[buffIndex++] = count >> 8;
-			buff[buffIndex++] = count >> 16;
-			buff[buffIndex++] = count >> 24;
+			buff[buffIndex++] = count & 0xff;
+			buff[buffIndex++] = (count >> 8) & 0xff;
+			buff[buffIndex++] = (count >> 16) & 0xff;
+			buff[buffIndex++] = (count >> 24) & 0xff;
 			buff[buffIndex++] = last;
 			count = 0;
 		}
@@ -342,9 +377,13 @@ void *job_runner(void *)
 		{
 			if (testing == 1)
 			{
-				cout << "waiting on previous semn" << endl;
+				cout << "waiting on previous sem: " << &job.prev_sem << endl;
 			}
 			sem_wait(job.prev_sem);
+			if (testing == 1)
+			{
+				cout << "waiting completed on previous semn" << endl;
+			}
 		}
 
 		fwrite(buff, sizeof(char), (size_t)buffIndex, stdout);
@@ -353,14 +392,19 @@ void *job_runner(void *)
 		{
 			if (testing == 1)
 			{
-				cout << "posting next sem" << endl;
+				cout << "posting next sem: " << &job.next_sem << endl;
 			}
 			sem_post(job.next_sem);
+			if (testing == 1)
+			{
+				cout << "posting completed on previous semn" << endl;
+			}
 		}
 		// TODO: deallocate memory for mmap? (memory leak)
-		
-		//delete [] map.mmap;
-		// DO NOT RETURN, otherwise, this thread will leave the thread pool
+
+		munmap(map.mmap, map.f_size);
+		// delete [] map.mmap;
+		//  DO NOT RETURN, otherwise, this thread will leave the thread pool
 	}
 }
 
