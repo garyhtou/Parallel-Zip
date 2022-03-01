@@ -1,5 +1,6 @@
 .vscode
 pzip
+zzip
 
 /output.pzip
 /output.zzip
