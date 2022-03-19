@@ -18,41 +18,44 @@ to order the output (print in the same order as the input list).
 
 ## Design Considerations
 
-### How to parallelize the compression?
+### Paralleling the compression
 
 We used multiple threads to compress the file. This allows us to run the
 compression algorithm in parallel. In addition, we saved this compressed data in
-memory to decrease the amount of time spent in the ordering semaphores' critical
-section.
+memory to decrease the amount of time spent in the ordering **semaphores'
+critical section**.
 
-### How to determine how many threads to create?
+### Determine the number of threads to create
 
 Using `get_nprocs()`, we can determine the number of processors available on the
 system. This number is then used as the max thread limit (unless the system does
-not support multiple cores — which it would then default to 5). The program will
+not have multiple cores — which it would then default to 5). The program will
 not create more threads than needed (except for the 5 default threads).
 
-### How to efficiently perform each piece of work?
+### Efficiency of each thread
 
-By memory mapping input files, compressing files using a thread pool, storing
-compressed data in memory until their turn to print, we are able to efficiently
-perform each piece of work in parallel.
+By **memory mapping** input files, using a **thread pool**, and storing
+compressed data in memory until their turn to print, we can efficiently perform
+each piece of work in parallel.
 
-### How to access the input file efficiently?
+### Access the input files efficiently
 
-Memory mapping was the way we efficiently accessed the input files.
+**Memory mapping** was the way we efficiently accessed the input files. This
+allows us to have easier/quicker access to the files. In addition, the memory
+mapping occurs in the worker threads. This allows input files to be
+read/processed concurrently!
 
-### How to coordinate multiple threads?
+### Coordinating multiple threads
 
-We used a lock to protect shared data (queue). A semaphore to prevent job
-runners from running when the queue is empty. And multiple semaphores to order
-the printing output.
+We used a lock to protect shared data (the job queue). A semaphore to prevent
+job worker threads from running when the queue is empty. And multiple semaphores
+to order the printing output.
 
-### How to terminate consumer threads in the thread pool?
+### Terminating threads in the thread pool
 
-We created a `kill` boolean in the job struct. Whenever a job runner receives a
-new job, it will check the `kill` boolean. If `kill` is `true`, we killed the
-thread and exited appropriately.
+We created a `kill` boolean in the job struct (this struct is added to the job
+queue). Whenever a worker thread receives a new job, it will check the `kill`
+boolean. If `kill` is `true`, we killed the thread and exit appropriately.
 
 ## Strengths and Weaknesses
 
@@ -60,10 +63,11 @@ Strengths:
 
 - Parallelizes the compression algorithm
 - Saves compressed data to memory before printing
-  - Prevents computation bottleneck
-- Faster than wzip
+  - Prevents computation and printing bottleneck
+- Faster than `wzip`
 - Handles potential system call errors
 
 Weaknesses:
 
 - Only one thread per file
+- Uses Run Length Encoding (RLE)
